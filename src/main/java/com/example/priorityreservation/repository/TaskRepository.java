@@ -6,7 +6,7 @@ package com.example.priorityreservation.repository;
 
 import com.example.priorityreservation.model.Task;
 import com.example.priorityreservation.model.Priority;
-import java.io.ObjectInputFilter.Status;
+import com.example.priorityreservation.model.Status;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import org.springframework.data.jpa.repository.Query;
@@ -23,4 +23,11 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     
     @Query("SELECT t FROM Task t WHERE t.priority = :priority")
     List<Task> findByPriority(@Param("priority") Priority priority);
+
+    List<Task> findByTitleContaining(String title);
+    List<Task> findByTitleContainingAndPriority(String title, Priority priority);
+    List<Task> findByTitleContainingAndStatus(String title, Status status);
+    List<Task> findByTitleContainingAndPriorityAndStatus(String title, Priority priority, Status status);
+    List<Task> findByPriorityAndStatus(Priority priority, Status status);
+    List<Task> findByStatus(Status status);
 }

@@ -1,16 +1,12 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- */
-
 package com.example.priorityreservation;
 
-/**
- *
- * @author rodol
- */
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
 public class PriorityReservationApplication {
 
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        SpringApplication.run(PriorityReservationApplication.class, args);
     }
 }

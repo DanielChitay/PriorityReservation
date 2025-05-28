@@ -11,6 +11,8 @@ C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\model\Subtask.java
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\repository\UserRepository.java
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\dto\TaskRequestDTO.java
+C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\model\TaskHistory.java
+C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\service\TaskEventConsumer.java
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\controller\TaskController.java
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\service\UndoManager.java
 C:\Users\rodol\OneDrive\Documents\NetBeansProjects\PriorityReservation\src\main\java\com\example\priorityreservation\model\Task.java

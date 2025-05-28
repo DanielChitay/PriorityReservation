@@ -133,4 +133,40 @@ public Task createTask(TaskRequestDTO taskDTO) {
         
         return updatedTask;
     }
+   
+    @Transactional(readOnly = true)
+public List<Task> searchTasks(String title, Priority priority, Status status) {
+    // Caso 1: Búsqueda por los 3 criterios
+    if (title != null && priority != null && status != null) {
+        return taskRepository.findByTitleContainingAndPriorityAndStatus(title, priority, status);
+    }
+    // Caso 2: Búsqueda por título y prioridad
+    else if (title != null && priority != null) {
+        return taskRepository.findByTitleContainingAndPriority(title, priority);
+    }
+    // Caso 3: Búsqueda por título y estado
+    else if (title != null && status != null) {
+        return taskRepository.findByTitleContainingAndStatus(title, status);
+    }
+    // Caso 4: Búsqueda por prioridad y estado
+    else if (priority != null && status != null) {
+        return taskRepository.findByPriorityAndStatus(priority, status);
+    }
+    // Caso 5: Búsqueda solo por título
+    else if (title != null) {
+        return taskRepository.findByTitleContaining(title);
+    }
+    // Caso 6: Búsqueda solo por prioridad
+    else if (priority != null) {
+        return taskRepository.findByPriority(priority);
+    }
+    // Caso 7: Búsqueda solo por estado
+    else if (status != null) {
+        return taskRepository.findByStatus(status);
+    }
+    // Caso 8: Sin filtros (devolver todas)
+    else {
+        return taskRepository.findAll();
+    }
+}
 }
