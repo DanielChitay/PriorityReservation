@@ -1,5 +1,6 @@
 package com.example.priorityreservation.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.util.List;
 
@@ -14,6 +15,7 @@ public class User {
     private String email;
     
     @OneToMany(mappedBy = "assignedUser")
+    @JsonIgnore // Esto rompe el ciclo de serialización
     private List<Task> tasks;
 
     // Constructors, Getters and Setters

@@ -10,19 +10,20 @@ package com.example.priorityreservation.model;
  */
 
 
-
-
 public enum Status {
     PENDING,
     IN_PROGRESS,
     COMPLETED;
 
-    // Método para evitar problemas con mayúsculas/minúsculas
+    // Método para convertir de String a Status de forma segura
     public static Status fromString(String value) {
+        if (value == null) {
+            return PENDING;
+        }
         try {
             return Status.valueOf(value.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Estado inválido. Use: PENDING, IN_PROGRESS o COMPLETED");
+            return PENDING; // Valor por defecto si no coincide
         }
     }
 }

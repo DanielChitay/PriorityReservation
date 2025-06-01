@@ -1,19 +1,17 @@
-# Fase de construcción
-FROM eclipse-temurin:17-jdk-jammy AS builder
+# Usa una imagen oficial de Java con Maven preinstalado
+FROM maven:3.8.6-eclipse-temurin-17 AS builder
+
 WORKDIR /app
+COPY . .
 
-# Copiar solo lo necesario para las dependencias primero
-COPY pom.xml .
-COPY src src
+# Construye la aplicación
+RUN mvn clean package -DskipTests
 
-# Instalar Maven y compilar
-RUN apt-get update && \
-    apt-get install -y maven && \
-    mvn clean package -DskipTests
-
-# Fase de ejecución
+# Imagen final más ligera
 FROM eclipse-temurin:17-jre-jammy
+
 WORKDIR /app
-COPY --from=builder /app/target/PriorityReservation-*.jar app.jar
+COPY --from=builder /app/target/*.jar app.jar
+
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

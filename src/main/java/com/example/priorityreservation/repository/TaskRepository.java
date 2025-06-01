@@ -9,6 +9,7 @@ import com.example.priorityreservation.model.Priority;
 import com.example.priorityreservation.model.Status;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,4 +31,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByTitleContainingAndPriorityAndStatus(String title, Priority priority, Status status);
     List<Task> findByPriorityAndStatus(Priority priority, Status status);
     List<Task> findByStatus(Status status);
+
+    @Override
+    Optional<Task> findById(Long id);
+
 }
