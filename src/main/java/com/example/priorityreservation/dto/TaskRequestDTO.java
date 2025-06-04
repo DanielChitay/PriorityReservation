@@ -1,13 +1,45 @@
 package com.example.priorityreservation.dto;
 
+import com.example.priorityreservation.model.Task;
+import com.example.priorityreservation.model.Task.TaskPriority;
+import com.example.priorityreservation.model.Task.TaskStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.*;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class TaskRequestDTO {
     @NotBlank(message = "Title is mandatory")
     private String title;
     
     private String description;
 
+    @NotNull(message = "Status cannot be null")
+    private TaskStatus status = TaskStatus.PENDING;
+
+    @NotNull(message = "Assigned user ID is mandatory")
+    private Long assignedUserId;
+
+    @NotNull(message = "Priority cannot be null")
+    private TaskPriority priority = TaskPriority.MEDIUM;
+
+    private Long parentTaskId;
+
+    // Constructor por defecto
+    public TaskRequestDTO() {
+    }
+
+    // Constructor con todos los campos
+    public TaskRequestDTO(String title, String description, TaskStatus status, 
+                         Long assignedUserId, TaskPriority priority, Long parentTaskId) {
+        this.title = title;
+        this.description = description;
+        this.status = status != null ? status : TaskStatus.PENDING;
+        this.assignedUserId = assignedUserId;
+        this.priority = priority != null ? priority : TaskPriority.MEDIUM;
+        this.parentTaskId = parentTaskId;
+    }
+
+    // Getters y Setters estilo JavaBean (necesarios para Jackson)
     public String getTitle() {
         return title;
     }
@@ -24,12 +56,12 @@ public class TaskRequestDTO {
         this.description = description;
     }
 
-    public String getStatus() {
+    public TaskStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
-        this.status = status;
+    public void setStatus(TaskStatus status) {
+        this.status = status != null ? status : TaskStatus.PENDING;
     }
 
     public Long getAssignedUserId() {
@@ -40,23 +72,79 @@ public class TaskRequestDTO {
         this.assignedUserId = assignedUserId;
     }
 
-    public String getPriority() {
+    public TaskPriority getPriority() {
         return priority;
     }
 
-    public void setPriority(String priority) {
-        this.priority = priority;
+    public void setPriority(TaskPriority priority) {
+        this.priority = priority != null ? priority : TaskPriority.MEDIUM;
     }
-    
-    @Pattern(regexp = "PENDING|IN_PROGRESS|COMPLETED", message = "Status must be PENDING, IN_PROGRESS or COMPLETED")
-    private String status = "PENDING"; // Valor por defecto
-    
-    @NotNull(message = "User ID is mandatory")
-    private Long assignedUserId; // Cambiado de userId a assignedUserId para coincidir con la entidad
-    
-    @NotBlank(message = "Priority is mandatory")
-    @Pattern(regexp = "HIGH|MEDIUM|LOW", message = "Priority must be HIGH, MEDIUM or LOW")
-    private String priority;
 
+    public Long getParentTaskId() {
+        return parentTaskId;
+    }
 
+    public void setParentTaskId(Long parentTaskId) {
+        this.parentTaskId = parentTaskId;
+    }
+
+    // Método toEntity() completo
+    public Task toEntity() {
+        Task task = new Task();
+        task.setTitle(this.title);
+        task.setDescription(this.description);
+        task.setStatus(this.status);
+        task.setPriority(this.priority);
+        // Nota: assignedUser y parentTask se deben establecer en el servicio
+        // después de verificar que existen en la base de datos
+        return task;
+    }
+
+    // Patrón Builder
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private String title;
+        private String description;
+        private TaskStatus status = TaskStatus.PENDING;
+        private Long assignedUserId;
+        private TaskPriority priority = TaskPriority.MEDIUM;
+        private Long parentTaskId;
+
+        public Builder title(String title) {
+            this.title = title;
+            return this;
+        }
+
+        public Builder description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Builder status(TaskStatus status) {
+            this.status = status != null ? status : TaskStatus.PENDING;
+            return this;
+        }
+
+        public Builder assignedUserId(Long assignedUserId) {
+            this.assignedUserId = assignedUserId;
+            return this;
+        }
+
+        public Builder priority(TaskPriority priority) {
+            this.priority = priority != null ? priority : TaskPriority.MEDIUM;
+            return this;
+        }
+
+        public Builder parentTaskId(Long parentTaskId) {
+            this.parentTaskId = parentTaskId;
+            return this;
+        }
+
+        public TaskRequestDTO build() {
+            return new TaskRequestDTO(title, description, status, assignedUserId, priority, parentTaskId);
+        }
+    }
 }

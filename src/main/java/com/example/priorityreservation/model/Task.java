@@ -2,102 +2,101 @@ package com.example.priorityreservation.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "tasks")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Task {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Column(nullable = false)
     private String title;
-    
-    @Column(columnDefinition = "TEXT")
+
     private String description;
-    
-    @Column(nullable = false)
-    private String status = "PENDING";
-    
-    @CreationTimestamp
-    private LocalDateTime createdAt;
-    
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
-    
+
     @Enumerated(EnumType.STRING)
-    private Priority priority;
+    @Column(nullable = false)
+    @Builder.Default
+    private TaskStatus status = TaskStatus.PENDING;
 
-    public Priority getPriority() {
-        return priority;
-    }
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private TaskPriority priority = TaskPriority.MEDIUM;
 
-    public void setPriority(Priority priority) {
-        this.priority = priority;
-    }
-
-    public User getAssignedUser() {
-        return assignedUser;
-    }
-
-    public void setAssignedUser(User assignedUser) {
-        this.assignedUser = assignedUser;
-    }
-    
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private User assignedUser;
 
-    public Long getId() {
-        return id;
-    }
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_task_id")
+    private Task parentTask;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    @OneToMany(mappedBy = "parentTask", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Task> subtasks = new ArrayList<>();
 
-    public String getTitle() {
-        return title;
-    }
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<TaskHistory> history = new ArrayList<>();
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
-    public String getDescription() {
-        return description;
-    }
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
-    public void setDescription(String description) {
-        this.description = description;
+   
+    // getters y setters
+    public TaskStatus getStatus() {
+        return this.status;
     }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
+    
+    public void setStatus(TaskStatus status) {
         this.status = status;
     }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public enum TaskStatus {
+        PENDING, IN_PROGRESS, COMPLETED
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public enum TaskPriority {
+        HIGH, MEDIUM, LOW
     }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    public void addSubtask(Task subtask) {
+        subtasks.add(subtask);
+        subtask.setParentTask(this);
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
+    public void removeSubtask(Task subtask) {
+        subtasks.remove(subtask);
+        subtask.setParentTask(null);
     }
 
+public void changeStatus(TaskStatus newStatus) {
+    if (this.status == TaskStatus.COMPLETED) {
+        throw new IllegalStateException("Cannot change status from COMPLETED");
+    }
     
-
+    // Solo cambia el estado, la auditoría se maneja externamente
+    this.status = newStatus;
+}
 }

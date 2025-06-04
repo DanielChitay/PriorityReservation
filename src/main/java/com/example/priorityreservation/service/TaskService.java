@@ -1,166 +1,393 @@
 package com.example.priorityreservation.service;
 
+import aj.org.objectweb.asm.TypeReference;
+import com.example.priorityreservation.dto.TaskResponseDTO;
 import com.example.priorityreservation.dto.TaskRequestDTO;
+import com.example.priorityreservation.dto.TaskStatusUpdateDTO;
+import com.example.priorityreservation.exception.ResourceNotFoundException;
 import com.example.priorityreservation.exception.TaskNotFoundException;
 import com.example.priorityreservation.exception.UserNotFoundException;
 import com.example.priorityreservation.model.*;
+import com.example.priorityreservation.model.Task.TaskStatus;
+import com.example.priorityreservation.repository.ActionStackRepository;
+import com.example.priorityreservation.repository.TaskHistoryRepository;
 import com.example.priorityreservation.repository.TaskRepository;
 import com.example.priorityreservation.repository.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
+import java.io.IOException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
+
+
 
 @Service
+@RequiredArgsConstructor
+@Transactional
 public class TaskService {
 
     private final TaskRepository taskRepository;
+    private final TaskEventPublisher eventPublisher;
     private final UserRepository userRepository;
+    private final ActionStackRepository actionStackRepository;
     private final RabbitTemplate rabbitTemplate;
-    private final UndoManager undoManager;
+    private final ObjectMapper objectMapper;
+    private final TaskAuditService taskAuditService; 
 
-    @Autowired
-    public TaskService(TaskRepository taskRepository,
-                     UserRepository userRepository,
-                     RabbitTemplate rabbitTemplate,
-                     UndoManager undoManager) {
-        this.taskRepository = taskRepository;
-        this.userRepository = userRepository;
-        this.rabbitTemplate = rabbitTemplate;
-        this.undoManager = undoManager;
-    }
-
-    @Transactional
-    public void executeTask(Task task) {
-        if (task == null) {
-            throw new IllegalArgumentException("Task cannot be null");
+    public TaskResponseDTO createTask(TaskRequestDTO taskRequest) {
+        Task task = taskRequest.toEntity();
+        
+        // Validar y asignar usuario
+        if (taskRequest.getAssignedUserId() != null) {
+            User user = userRepository.findById(taskRequest.getAssignedUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + taskRequest.getAssignedUserId()));
+            task.setAssignedUser(user);
         }
         
-        task.setStatus(Status.IN_PROGRESS.toString());
-        Task updatedTask = taskRepository.save(task);
-        rabbitTemplate.convertAndSend("tasks.exchange", "task.started", updatedTask);
+        // Validar y asignar tarea padre
+        if (taskRequest.getParentTaskId() != null) {
+            Task parentTask = taskRepository.findById(taskRequest.getParentTaskId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent task not found with id: " + taskRequest.getParentTaskId()));
+            task.setParentTask(parentTask);
+        }
+        
+        Task savedTask = taskRepository.save(task);
+        saveTaskActionToStack(ActionStack.ActionType.CREATE, savedTask);
+        sendTaskEvent("task.created", savedTask);
+        
+        return TaskResponseDTO.fromEntity(savedTask);
     }
 
-public Task createTask(TaskRequestDTO taskDTO) {
-    User user = userRepository.findById(taskDTO.getAssignedUserId())
-        .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    @Transactional(readOnly = true)
+    public TaskResponseDTO getTaskById(Long id) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
+        return TaskResponseDTO.fromEntity(task);
+    }
+
+    public TaskResponseDTO updateTask(Long id, TaskRequestDTO taskRequest) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
+        
+        // Guardar estado anterior
+        Map<String, Object> oldState = createTaskStateMap(task);
+        
+        // Actualizar campos básicos
+        task.setTitle(taskRequest.getTitle());
+        task.setDescription(taskRequest.getDescription());
+        task.setPriority(taskRequest.getPriority());
+        
+        // Actualizar usuario asignado
+        if (taskRequest.getAssignedUserId() != null) {
+            User user = userRepository.findById(taskRequest.getAssignedUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + taskRequest.getAssignedUserId()));
+            task.setAssignedUser(user);
+        } else {
+            task.setAssignedUser(null);
+        }
+        
+        // Actualizar tarea padre
+        if (taskRequest.getParentTaskId() != null) {
+            Task parentTask = taskRepository.findById(taskRequest.getParentTaskId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent task not found with id: " + taskRequest.getParentTaskId()));
+            task.setParentTask(parentTask);
+        } else {
+            task.setParentTask(null);
+        }
+        
+        Task updatedTask = taskRepository.save(task);
+        
+        // Guardar acción con estado anterior y nuevo
+        Map<String, Object> actionData = new HashMap<>();
+        actionData.put("old", oldState);
+        actionData.put("new", createTaskStateMap(updatedTask));
+        saveActionToStack(ActionStack.ActionType.UPDATE, ActionStack.EntityType.TASK, id, actionData);
+        
+        sendTaskEvent("task.updated", updatedTask);
+        
+        return TaskResponseDTO.fromEntity(updatedTask);
+    }
+
+@Transactional(readOnly = true)
+public List<TaskResponseDTO> getTasksByStatus(Task.TaskStatus status) {
+    return taskRepository.findByStatus(status).stream()
+            .map(TaskResponseDTO::fromEntity)
+            .collect(Collectors.toList()); // Usar collect en lugar de toList() para mayor compatibilidad
+}
+public TaskResponseDTO updateTaskStatus(Long id, TaskStatusUpdateDTO statusUpdate) {
+    Task task = taskRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
     
-    Task task = new Task();
-    task.setTitle(taskDTO.getTitle());
-    task.setDescription(taskDTO.getDescription());
-    task.setStatus(taskDTO.getStatus());
-    task.setPriority(Priority.valueOf(taskDTO.getPriority()));
-    task.setAssignedUser(user);
+    validateStatusTransition(task.getStatus(), statusUpdate.getStatus());
     
-    return taskRepository.save(task);
+    Task.TaskStatus oldStatus = task.getStatus();
+    task.setStatus(statusUpdate.getStatus());
+    Task updatedTask = taskRepository.save(task);
+    
+    // Guardar acción específica para cambio de estado
+    Map<String, Object> statusData = Map.of(
+        "oldStatus", oldStatus.name(),
+        "newStatus", statusUpdate.getStatus().name()
+    );
+    saveActionToStack(ActionStack.ActionType.STATUS_CHANGE, ActionStack.EntityType.TASK, id, statusData);
+    
+    // Publicar evento según el nuevo estado
+    String eventType = statusUpdate.getStatus() == Task.TaskStatus.COMPLETED ? 
+                      "task.completed" : "task.status_changed";
+    sendTaskEvent(eventType, updatedTask);
+    
+    return TaskResponseDTO.fromEntity(updatedTask);
 }
 
-    @Transactional
-    public Task markTaskAsCompleted(Long taskId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new TaskNotFoundException("Tarea no encontrada con ID: " + taskId));
+    
+    private TaskResponseDTO undoCreateAction(ActionStack action) throws JsonProcessingException {
+    taskRepository.deleteById(action.getEntityId());
+    return null;
+}
 
-        if (!task.getStatus().equals(Status.IN_PROGRESS)) {
-            throw new IllegalStateException("Solo tareas EN PROGRESO pueden marcarse como completadas");
-        }
+private TaskResponseDTO undoUpdateAction(ActionStack action) throws JsonProcessingException {
+    Map<?, ?> oldState = objectMapper.readValue(action.getEntityData(), Map.class);
+    
+    Task task = taskRepository.findById(action.getEntityId())
+            .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+    
+    // Restaurar propiedades básicas
+    task.setTitle((String) oldState.get("title"));
+    task.setDescription((String) oldState.get("description"));
+    task.setPriority(Task.TaskPriority.valueOf((String) oldState.get("priority")));
+    task.setStatus(Task.TaskStatus.valueOf((String) oldState.get("status")));
+    
+    // Restaurar relaciones
+    if (oldState.get("assignedUserId") != null) {
+        User user = userRepository.findById(Long.valueOf(oldState.get("assignedUserId").toString()))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        task.setAssignedUser(user);
+    } else {
+        task.setAssignedUser(null);
+    }
+    
+    if (oldState.get("parentTaskId") != null) {
+        Task parent = taskRepository.findById(Long.valueOf(oldState.get("parentTaskId").toString()))
+                .orElseThrow(() -> new ResourceNotFoundException("Parent task not found"));
+        task.setParentTask(parent);
+    } else {
+        task.setParentTask(null);
+    }
+    
+    Task restoredTask = taskRepository.save(task);
+    return TaskResponseDTO.fromEntity(restoredTask);
+}
 
-        task.setStatus(Status.COMPLETED.toString());
-        task.setUpdatedAt(LocalDateTime.now());
-        Task updatedTask = taskRepository.save(task);
+private TaskResponseDTO undoDeleteAction(ActionStack action) throws JsonProcessingException {
+    Map<String, Object> taskData = objectMapper.readValue(action.getEntityData(), Map.class);
+    
+    Task task = new Task();
+    task.setTitle((String) taskData.get("title"));
+    task.setDescription((String) taskData.get("description"));
+    task.setStatus(Task.TaskStatus.valueOf((String) taskData.get("status")));
+    task.setPriority(Task.TaskPriority.valueOf((String) taskData.get("priority")));
+    
+    // Restaurar relaciones
+    if (taskData.get("assignedUserId") != null) {
+        User user = userRepository.findById(Long.valueOf(taskData.get("assignedUserId").toString()))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        task.setAssignedUser(user);
+    }
+    
+    if (taskData.get("parentTaskId") != null) {
+        Task parent = taskRepository.findById(Long.valueOf(taskData.get("parentTaskId").toString()))
+                .orElseThrow(() -> new ResourceNotFoundException("Parent task not found"));
+        task.setParentTask(parent);
+    }
+    
+    Task recreatedTask = taskRepository.save(task);
+    return TaskResponseDTO.fromEntity(recreatedTask);
+}
 
-        rabbitTemplate.convertAndSend("tasks.exchange", "task.completed", updatedTask);
-
-        return updatedTask;
+private TaskResponseDTO undoStatusChangeAction(ActionStack action) throws JsonProcessingException {
+    Map<?, ?> statusData = objectMapper.readValue(action.getEntityData(), Map.class);
+    String oldStatus = (String) statusData.get("oldStatus");
+    
+    Task task = taskRepository.findById(action.getEntityId())
+            .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+    
+    task.setStatus(Task.TaskStatus.valueOf(oldStatus));
+    Task updatedTask = taskRepository.save(task);
+    
+    return TaskResponseDTO.fromEntity(updatedTask);
+}
+    public void deleteTask(Long id) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
+        
+        // Guardar datos completos de la tarea eliminada
+        saveTaskActionToStack(ActionStack.ActionType.DELETE, task);
+        taskRepository.delete(task);
+        
+        sendTaskEvent("task.deleted", task);
     }
 
-    public Task updateTaskStatus(Long taskId, String newStatus) {
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getTasksByUser(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User not found with id: " + userId);
+        }
+        return taskRepository.findByAssignedUserId(userId).stream()
+                .map(TaskResponseDTO::fromEntity)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getSubtasks(Long parentTaskId) {
+        if (!taskRepository.existsById(parentTaskId)) {
+            throw new ResourceNotFoundException("Parent task not found with id: " + parentTaskId);
+        }
+        return taskRepository.findByParentTaskId(parentTaskId).stream()
+                .map(TaskResponseDTO::fromEntity)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getRootTasks() {
+        return taskRepository.findByParentTaskIsNull().stream()
+                .map(TaskResponseDTO::fromEntity)
+                .toList();
+    }
+
+
+    // Métodos auxiliares
+    private Map<String, Object> createTaskStateMap(Task task) {
+        Map<String, Object> state = new HashMap<>();
+        state.put("title", task.getTitle());
+        state.put("description", task.getDescription());
+        state.put("status", task.getStatus().name());
+        state.put("priority", task.getPriority().name());
+        state.put("assignedUserId", task.getAssignedUser() != null ? task.getAssignedUser().getId() : null);
+        state.put("parentTaskId", task.getParentTask() != null ? task.getParentTask().getId() : null);
+        return state;
+    }
+
+    private void saveTaskActionToStack(ActionStack.ActionType actionType, Task task) {
+        saveActionToStack(actionType, ActionStack.EntityType.TASK, task.getId(), createTaskStateMap(task));
+    }
+
+private void saveActionToStack(ActionStack.ActionType actionType, 
+                             ActionStack.EntityType entityType, 
+                             Long entityId, 
+                             Object entityData) {
+    try {
+        ActionStack action = ActionStack.builder()
+            .actionType(actionType)
+            .entityType(entityType)
+            .entityId(entityId)
+            .entityData(objectMapper.writeValueAsString(entityData))
+            .build();
+            // performedAt se establece automáticamente por @CreationTimestamp
+        actionStackRepository.save(action);
+    } catch (JsonProcessingException e) {
+        throw new RuntimeException("Error saving action to stack", e);
+    }
+}
+
+@Transactional
+public Task updateTaskStatus(Long taskId, TaskStatus newStatus) {
     Task task = taskRepository.findById(taskId)
         .orElseThrow(() -> new EntityNotFoundException("Task not found"));
     
-    task.setStatus(newStatus);
-    return taskRepository.save(task);
-    }
+    TaskStatus oldStatus = task.getStatus();
+    task.changeStatus(newStatus);
     
-    public List<Task> getTasksByUser(Long userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new UserNotFoundException("Usuario no encontrado con ID: " + userId);
+    // Guardar la tarea y el historial en la misma transacción
+    Task updatedTask = taskRepository.save(task);
+    taskAuditService.recordStatusChange(task, oldStatus, newStatus);
+    
+    eventPublisher.publishTaskUpdatedEvent(updatedTask);
+        
+    if (newStatus == TaskStatus.COMPLETED) {
+            eventPublisher.publishTaskCompletedEvent(updatedTask);
+     }
+    
+    return updatedTask;
+}
+public TaskResponseDTO undoLastAction() throws JsonProcessingException {
+    ActionStack lastAction = actionStackRepository.findTopByOrderByPerformedAtDesc()
+            .orElseThrow(() -> new IllegalStateException("No actions to undo"));
+    
+    try {
+        switch (lastAction.getActionType()) {
+            case CREATE:
+                return undoCreateAction(lastAction);
+            case UPDATE:
+                return undoUpdateAction(lastAction);
+            case DELETE:
+                return undoDeleteAction(lastAction);
+            case STATUS_CHANGE:
+                return undoStatusChangeAction(lastAction);
+            default:
+                throw new IllegalStateException("Unknown action type");
         }
-        return taskRepository.findByAssignedUserId(userId);
+    } finally {
+        actionStackRepository.delete(lastAction);
+    }
+}
+
+    private void validateStatusTransition(Task.TaskStatus currentStatus, Task.TaskStatus newStatus) {
+        if (currentStatus == Task.TaskStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot change status from COMPLETED");
+        }
+        
+        if (newStatus == Task.TaskStatus.PENDING && currentStatus == Task.TaskStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot revert from IN_PROGRESS to PENDING");
+        }
     }
 
-    public List<Task> getTasksByPriority(String priority) {
+    private void sendTaskEvent(String routingKey, Task task) {
         try {
-            Priority priorityEnum = Priority.valueOf(priority.toUpperCase());
-            return taskRepository.findByPriority(priorityEnum);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Valor de prioridad inválido: " + priority);
+            rabbitTemplate.convertAndSend("task.events", routingKey, 
+                objectMapper.writeValueAsString(TaskResponseDTO.fromEntity(task)));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Error sending task event", e);
         }
     }
 
-    @Transactional
-    public Task updateTaskStatus(Long taskId, Status newStatus) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new TaskNotFoundException("Tarea no encontrada con ID: " + taskId));
-
-        // Validar transición de estado
-        if (task.getStatus().equals(Status.COMPLETED) && !newStatus.equals(Status.COMPLETED)) {
-            throw new IllegalStateException("Tareas COMPLETADAS no pueden modificarse");
-        }
-
-        task.setStatus(newStatus.toString());
-        
-        if (newStatus.equals(Status.COMPLETED)) {
-            task.setUpdatedAt(LocalDateTime.now());
-        }
-        
-        Task updatedTask = taskRepository.save(task);
-        
-        // Notificar cambio de estado
-        rabbitTemplate.convertAndSend("tasks.exchange", "task.updated", updatedTask);
-        
-        return updatedTask;
-    }
-   public Optional<Task> getTaskById(Long taskId) {
-    return taskRepository.findById(taskId);
-}
+ 
+    // Métodos de búsqueda
     @Transactional(readOnly = true)
-public List<Task> searchTasks(String title, Priority priority, Status status) {
-    // Caso 1: Búsqueda por los 3 criterios
-    if (title != null && priority != null && status != null) {
-        return taskRepository.findByTitleContainingAndPriorityAndStatus(title, priority, status);
+    public List<TaskResponseDTO> searchByTitle(String title) {
+        return taskRepository.findByTitleContainingIgnoreCase(title).stream()
+                .map(TaskResponseDTO::fromEntity)
+                .toList();
     }
-    // Caso 2: Búsqueda por título y prioridad
-    else if (title != null && priority != null) {
-        return taskRepository.findByTitleContainingAndPriority(title, priority);
+
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> searchByDescription(String description) {
+        return taskRepository.findByDescriptionContainingIgnoreCase(description).stream()
+                .map(TaskResponseDTO::fromEntity)
+                .toList();
     }
-    // Caso 3: Búsqueda por título y estado
-    else if (title != null && status != null) {
-        return taskRepository.findByTitleContainingAndStatus(title, status);
+
+    @Transactional(readOnly = true)
+    public boolean existsByTitleAndParent(String title, Long parentTaskId) {
+        return taskRepository.existsByTitleAndParentTaskId(title, parentTaskId);
     }
-    // Caso 4: Búsqueda por prioridad y estado
-    else if (priority != null && status != null) {
-        return taskRepository.findByPriorityAndStatus(priority, status);
+    @Transactional
+    public Task createTask(Task task) {
+        Task savedTask = taskRepository.save(task);
+        eventPublisher.publishTaskCreatedEvent(savedTask);
+        return savedTask;
     }
-    // Caso 5: Búsqueda solo por título
-    else if (title != null) {
-        return taskRepository.findByTitleContaining(title);
-    }
-    // Caso 6: Búsqueda solo por prioridad
-    else if (priority != null) {
-        return taskRepository.findByPriority(priority);
-    }
-    // Caso 7: Búsqueda solo por estado
-    else if (status != null) {
-        return taskRepository.findByStatus(status);
-    }
-    // Caso 8: Sin filtros (devolver todas)
-    else {
-        return taskRepository.findAll();
-    }
-}
+
+
 }
