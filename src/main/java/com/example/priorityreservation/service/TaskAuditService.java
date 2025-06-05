@@ -27,9 +27,8 @@ public class TaskAuditService {
     private final TaskRepository taskRepository;
     
     public Optional<TaskHistory> getLastStatusChange(Long taskId) {
-        return taskHistoryRepository.findLastStatusChangeNative(taskId); // Usando la versión nativa
-        // O alternativamente:
-        // return taskHistoryRepository.findLastStatusChange(taskId); // Usando el método default
+        return taskHistoryRepository.findLastStatusChangeNative(taskId); 
+ 
     }
    
     public void recordTaskChange(Long taskId, String fieldName, 
@@ -55,7 +54,6 @@ public class TaskAuditService {
     }
     
     private String getCurrentUsername() {
-        // Implementación real de autenticación
-        return "system";
+        return "DANIEL_VELASQUEZ";
     }
 }

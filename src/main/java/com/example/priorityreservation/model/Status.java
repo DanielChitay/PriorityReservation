@@ -15,7 +15,6 @@ public enum Status {
     IN_PROGRESS,
     COMPLETED;
 
-    // Método para convertir de String a Status de forma segura
     public static Status fromString(String value) {
         if (value == null) {
             return PENDING;
@@ -23,7 +22,7 @@ public enum Status {
         try {
             return Status.valueOf(value.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return PENDING; // Valor por defecto si no coincide
+            return PENDING; 
         }
     }
 }

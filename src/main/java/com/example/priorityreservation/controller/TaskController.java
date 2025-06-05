@@ -1,28 +1,21 @@
 package com.example.priorityreservation.controller;
 
 import com.example.priorityreservation.dto.TaskResponseDTO;
-import com.example.priorityreservation.model.Task;
 import com.example.priorityreservation.dto.TaskRequestDTO;
 import com.example.priorityreservation.dto.TaskStatusUpdateDTO;
-import com.example.priorityreservation.model.Priority;
-import com.example.priorityreservation.model.Status;
+import com.example.priorityreservation.model.TaskHistory;
+import com.example.priorityreservation.repository.TaskHistoryRepository;
 import com.example.priorityreservation.service.TaskService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.HashMap;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.BindingResult;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -31,6 +24,7 @@ import org.springframework.validation.BindingResult;
 public class TaskController {
 
     private final TaskService taskService;
+private final TaskHistoryRepository taskHistoryRepository;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -87,5 +81,10 @@ public class TaskController {
     public ResponseEntity<TaskResponseDTO> undoLastAction() throws JsonProcessingException {
         TaskResponseDTO result = taskService.undoLastAction();
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.noContent().build();
+    }
+    
+    @GetMapping("/{taskId}/history")
+    public List<TaskHistory> getTaskHistory(@PathVariable Long taskId) {
+        return taskHistoryRepository.findByTaskId(taskId);
     }
 }

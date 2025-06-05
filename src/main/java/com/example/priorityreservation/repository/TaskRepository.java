@@ -21,10 +21,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
     
-        // Método para encontrar tareas sin padre (tareas raíz)
     List<Task> findByParentTaskIsNull();
     
-    // Método para encontrar tareas por estado
+
     List<Task> findByStatus(Task.TaskStatus status);
     
 
@@ -43,20 +42,15 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @Override
     Optional<Task> findById(Long id);
         
-    // Método faltante 1: Buscar tareas por parentTaskId
     List<Task> findByParentTaskId(Long parentTaskId);
-    
-    // Método faltante 2: Buscar tareas raíz (sin padre)
+
     @Query("SELECT t FROM Task t WHERE t.parentTask IS NULL")
     List<Task> findRootTasks();
-    
-    // Método faltante 3: Buscar por título (usando Like para búsqueda parcial)
+
     List<Task> findByTitleContainingIgnoreCase(String title);
-    
-    // Método faltante 4: Buscar por descripción (usando Like para búsqueda parcial)
+
     List<Task> findByDescriptionContainingIgnoreCase(String description);
-    
-    // Método adicional útil para validaciones
+
     boolean existsByTitleAndParentTaskId(String title, Long parentTaskId);
 
 }

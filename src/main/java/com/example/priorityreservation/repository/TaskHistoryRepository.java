@@ -11,7 +11,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.Modifying;
 
 /**
  *
@@ -22,20 +21,19 @@ import org.springframework.data.jpa.repository.Modifying;
 @Repository
 public interface TaskHistoryRepository extends JpaRepository<TaskHistory, Long> {
     
-    // Versión corregida usando JPQL
+
     @Query("SELECT th FROM TaskHistory th " +
            "WHERE th.task.id = :taskId AND th.fieldName = 'status' " +
            "ORDER BY th.changedAt DESC")
     List<TaskHistory> findStatusChangesByTaskId(@Param("taskId") Long taskId);
-    
-    // Método alternativo para obtener el último cambio
+
     default Optional<TaskHistory> findLastStatusChange(Long taskId) {
         return findStatusChangesByTaskId(taskId)
             .stream()
             .findFirst();
     }
-    
-    // Otra opción usando consulta nativa
+    List<TaskHistory> findByTaskId(Long taskId);
+
     @Query(value = "SELECT * FROM task_history th " +
                   "WHERE th.task_id = :taskId AND th.field_name = 'status' " +
                   "ORDER BY th.changed_at DESC LIMIT 1", 

@@ -4,7 +4,6 @@
  */
 package com.example.priorityreservation.controller;
 
-import com.example.priorityreservation.dto.TaskResponseDTO;
 import com.example.priorityreservation.dto.UserRequestDTO;
 import com.example.priorityreservation.dto.UserResponseDTO;
 import com.example.priorityreservation.service.UserService;

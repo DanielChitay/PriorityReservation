@@ -24,11 +24,9 @@ public class TaskRequestDTO {
 
     private Long parentTaskId;
 
-    // Constructor por defecto
     public TaskRequestDTO() {
     }
 
-    // Constructor con todos los campos
     public TaskRequestDTO(String title, String description, TaskStatus status, 
                          Long assignedUserId, TaskPriority priority, Long parentTaskId) {
         this.title = title;
@@ -39,7 +37,7 @@ public class TaskRequestDTO {
         this.parentTaskId = parentTaskId;
     }
 
-    // Getters y Setters estilo JavaBean (necesarios para Jackson)
+
     public String getTitle() {
         return title;
     }
@@ -88,7 +86,6 @@ public class TaskRequestDTO {
         this.parentTaskId = parentTaskId;
     }
 
-    // Método toEntity() completo
     public Task toEntity() {
         Task task = new Task();
         task.setTitle(this.title);

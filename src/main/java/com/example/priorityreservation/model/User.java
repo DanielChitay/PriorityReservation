@@ -31,7 +31,6 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    // Relación CORRECTA: Un usuario tiene muchas tareas asignadas
     @OneToMany(mappedBy = "assignedUser", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Task> tasks = new ArrayList<>();

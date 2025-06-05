@@ -1,8 +1,6 @@
 package com.example.priorityreservation.dto;
 
 import com.example.priorityreservation.model.Task;
-import com.example.priorityreservation.model.TaskHistory;
-import com.example.priorityreservation.model.User;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;

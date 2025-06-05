@@ -1,12 +1,9 @@
 package com.example.priorityreservation.service;
 
-import aj.org.objectweb.asm.TypeReference;
 import com.example.priorityreservation.dto.TaskResponseDTO;
 import com.example.priorityreservation.dto.TaskRequestDTO;
 import com.example.priorityreservation.dto.TaskStatusUpdateDTO;
 import com.example.priorityreservation.exception.ResourceNotFoundException;
-import com.example.priorityreservation.exception.TaskNotFoundException;
-import com.example.priorityreservation.exception.UserNotFoundException;
 import com.example.priorityreservation.model.*;
 import com.example.priorityreservation.model.Task.TaskStatus;
 import com.example.priorityreservation.repository.ActionStackRepository;
@@ -16,9 +13,7 @@ import com.example.priorityreservation.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
-import java.io.IOException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +21,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 
 
 
@@ -45,18 +38,16 @@ public class TaskService {
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final TaskAuditService taskAuditService; 
-
+        private final TaskHistoryRepository taskHistoryRepository;
     public TaskResponseDTO createTask(TaskRequestDTO taskRequest) {
         Task task = taskRequest.toEntity();
         
-        // Validar y asignar usuario
         if (taskRequest.getAssignedUserId() != null) {
             User user = userRepository.findById(taskRequest.getAssignedUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + taskRequest.getAssignedUserId()));
             task.setAssignedUser(user);
         }
         
-        // Validar y asignar tarea padre
         if (taskRequest.getParentTaskId() != null) {
             Task parentTask = taskRepository.findById(taskRequest.getParentTaskId())
                     .orElseThrow(() -> new ResourceNotFoundException("Parent task not found with id: " + taskRequest.getParentTaskId()));
@@ -126,31 +117,44 @@ public List<TaskResponseDTO> getTasksByStatus(Task.TaskStatus status) {
             .map(TaskResponseDTO::fromEntity)
             .collect(Collectors.toList()); // Usar collect en lugar de toList() para mayor compatibilidad
 }
+
 public TaskResponseDTO updateTaskStatus(Long id, TaskStatusUpdateDTO statusUpdate) {
     Task task = taskRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + id));
     
     validateStatusTransition(task.getStatus(), statusUpdate.getStatus());
     
-    Task.TaskStatus oldStatus = task.getStatus();
+    // Guardar estado anterior
+    String oldStatus = task.getStatus().name();
+    
+    // Actualizar tarea
     task.setStatus(statusUpdate.getStatus());
     Task updatedTask = taskRepository.save(task);
     
-    // Guardar acción específica para cambio de estado
+    // >>>>>>>>> SOLO ESTO ES NUEVO - Registro en tu tabla existente <<<<<<<<<<
+    TaskHistory history = new TaskHistory();
+    history.setTask(task); // Relación ManyToOne que ya tienes
+    history.setFieldName("status");
+    history.setOldValue(oldStatus);
+    history.setNewValue(statusUpdate.getStatus().name());
+    history.setChangedAt(LocalDateTime.now());
+    // changedBy lo puedes setear si necesitas
+    taskHistoryRepository.save(history);
+    // >>>>>>>>> FIN DEL CAMBIO <<<<<<<<<<
+    
+    // Tu código original sigue igual
     Map<String, Object> statusData = Map.of(
-        "oldStatus", oldStatus.name(),
+        "oldStatus", oldStatus,
         "newStatus", statusUpdate.getStatus().name()
     );
     saveActionToStack(ActionStack.ActionType.STATUS_CHANGE, ActionStack.EntityType.TASK, id, statusData);
     
-    // Publicar evento según el nuevo estado
     String eventType = statusUpdate.getStatus() == Task.TaskStatus.COMPLETED ? 
                       "task.completed" : "task.status_changed";
     sendTaskEvent(eventType, updatedTask);
     
     return TaskResponseDTO.fromEntity(updatedTask);
 }
-
     
     private TaskResponseDTO undoCreateAction(ActionStack action) throws JsonProcessingException {
     taskRepository.deleteById(action.getEntityId());

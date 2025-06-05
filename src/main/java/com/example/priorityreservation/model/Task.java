@@ -96,7 +96,6 @@ public void changeStatus(TaskStatus newStatus) {
         throw new IllegalStateException("Cannot change status from COMPLETED");
     }
     
-    // Solo cambia el estado, la auditoría se maneja externamente
     this.status = newStatus;
 }
 }

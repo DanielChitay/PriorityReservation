@@ -5,17 +5,13 @@ import com.example.priorityreservation.model.Task;
 import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.Comparator;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import java.util.Queue;
-import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class TaskScheduler {
@@ -48,7 +44,6 @@ public class TaskScheduler {
             ScheduledTask scheduledTask = taskQueue.poll();
             Task task = scheduledTask.getTask();
             
-            // Actualizar la tarea según sea necesario
             taskService.updateTaskStatus(task.getId(), 
                     new TaskStatusUpdateDTO(Task.TaskStatus.IN_PROGRESS));
         }

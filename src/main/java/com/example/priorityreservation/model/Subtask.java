@@ -23,7 +23,6 @@ public class Subtask {
     @ManyToOne
     private Task parentTask;
 
-    // Constructors, Getters and Setters
     public Subtask() {}
 
     public Long getId() { return id; }

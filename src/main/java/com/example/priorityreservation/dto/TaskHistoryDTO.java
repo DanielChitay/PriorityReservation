@@ -12,19 +12,15 @@ import java.time.LocalDateTime;
  * @author rodol
  */
 public record TaskHistoryDTO(
-    Long id,                // ID del registro de historial
-    Long taskId,            // ID de la tarea relacionada
-    String fieldName,       // Nombre del campo que cambió (ej. "status")
-    String oldValue,        // Valor anterior del campo
-    String newValue,        // Nuevo valor del campo
-    LocalDateTime changedAt,// Fecha y hora del cambio
-    String changedBy        // Usuario que realizó el cambio
+    Long id,                
+    Long taskId,            
+    String fieldName,       
+    String oldValue,        
+    String newValue,        
+    LocalDateTime changedAt,
+    String changedBy      
 ) {
-    /**
-     * Método para convertir una entidad TaskHistory a su DTO correspondiente
-     * @param history Entidad TaskHistory
-     * @return TaskHistoryDTO o null si la entrada es null
-     */
+
     public static TaskHistoryDTO fromEntity(TaskHistory history) {
         if (history == null) {
             return null;
